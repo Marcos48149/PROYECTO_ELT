@@ -12,13 +12,13 @@ from datetime import datetime, timezone,timedelta
 
 
 
+
 def guardar_nueva_tabla(df, path, mode="overwrite", partition_cols=None):
 
     write_deltalake(
         path, df, mode=mode, partition_by=partition_cols
     )
     return 'se creo un delta'
-
 
 
 def guardar_en_tabla_delta(data, path, partition_cols=None):
@@ -28,49 +28,47 @@ def guardar_en_tabla_delta(data, path, partition_cols=None):
     asegurando que no se guarden registros duplicados.
 
     Args:
-      new_data (pd.DataFrame): Los datos que se desean guardar.
-      data_path (str): La ruta donde se guardará el dataframe en formato Delta Lake.
-      predicate (str): La condición de predicado para la operación MERGE.
+      data (pd.DataFrame): Los datos que se desean guardar.
+      path (str): La ruta donde se guardará el dataframe en formato Delta Lake.
+      partition_cols (list): Columnas para particionar los datos (opcional).
     """
 
     try:
         # Leer la tabla Delta para obtener la fecha máxima
         table = DeltaTable(path)
-        df= table.to_pandas()
-        
-        df['date'] = pd.to_datetime(df['date'])
-        data['date'] = pd.to_datetime(data['date'])
+        df = table.to_pandas()
 
+        # Convertir las fechas especificando el formato correcto
+        df['date'] = pd.to_datetime(df['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+        data['date'] = pd.to_datetime(data['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+
+        # Localizar las fechas en UTC si no tienen zona horaria
         if data['date'].dt.tz is None:
-            # Localizar las fechas en UTC si no tienen zona horaria
             data['date'] = data['date'].dt.tz_localize('UTC')
 
-
+        # Obtener la fecha máxima de la tabla Delta
         fecha_max_target = df['date'].max()
-        #fecha_min_source = data['date'].min()
 
+        # Localizar la fecha en UTC si no tiene información de zona horaria
         if fecha_max_target.tzinfo is None:
-        # Localizamos la fecha en UTC
             fecha_max_target = fecha_max_target.tz_localize('UTC')
-            
-        fechas_max_utc = fecha_max_target.astimezone(timezone.utc) 
 
-      # Filtrar los datos nuevos que tienen fecha/hora posterior
+        fechas_max_utc = fecha_max_target.astimezone(timezone.utc)
+
+        # Filtrar los datos nuevos que tienen fecha/hora posterior
         datos_nuevos = data[data['date'] > fechas_max_utc]
-        #datos_nuevos= pa.Table.from_pandas(datos_nuevos)
-        datos_nuevos2= pa.Table.from_pandas(datos_nuevos)
-        table.merge(
-                    source=datos_nuevos2,
-                    source_alias="source",
-                    target_alias="target",
-                    predicate= "source.date > target.date " 
-                ) \
-                .when_not_matched_insert_all() \
-                .execute()
+        datos_nuevos2 = pa.Table.from_pandas(datos_nuevos)
 
-    # Si no existe la tabla Delta Lake, se guarda como nueva
+        # Verificar si hay datos nuevos para guardar
+        if datos_nuevos2.num_rows > 0:
+            # Guardar los datos nuevos en la tabla Delta
+            write_deltalake(
+                path, datos_nuevos2, mode='append', partition_by=partition_cols
+            )
+
     except TableNotFoundError:
-      guardar_nueva_tabla(data, path, partition_cols=partition_cols)
+        # Si no existe la tabla Delta Lake, se guarda como nueva
+        guardar_nueva_tabla(data, path, partition_cols=partition_cols)
     
 
  
