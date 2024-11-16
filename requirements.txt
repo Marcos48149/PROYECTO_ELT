@@ -1,0 +1,17 @@
+greenlet==3.0.3
+numpy==1.26.4
+pandas==2.2.1
+PyMySQL==1.1.0
+python-dateutil==2.8.2
+pytz==2024.1
+six==1.16.0
+SQLAlchemy==2.0.27
+typing_extensions==4.10.0
+tzdata==2024.1
+requests
+pandas              # Para manipulación de datos en formato DataFrame
+SQLAlchemy==2.0.27   # ORM para interactuar con bases de datos SQL
+psycopg2            # Conector para PostgreSQL
+delta-spark==3.2.0   # Para trabajar con Delta Lake en Spark
+pyspark==3.5.0       # Motor de procesamiento distribuido
+pyarrow  
