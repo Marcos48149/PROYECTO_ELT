@@ -58,13 +58,28 @@ def guardar_en_tabla_delta(data, path, partition_cols=None):
         # Filtrar los datos nuevos que tienen fecha/hora posterior
         datos_nuevos = data[data['date'] > fechas_max_utc]
         datos_nuevos2 = pa.Table.from_pandas(datos_nuevos)
+        
+        # aca borro una columna adicinal que me esta creando automaticamente pyarrow 
+        datos_nuevos2 = datos_nuevos2.drop(['__index_level_0__'])
 
         # Verificar si hay datos nuevos para guardar
         if datos_nuevos2.num_rows > 0:
-            # Guardar los datos nuevos en la tabla Delta
-            write_deltalake(
-                path, datos_nuevos2, mode='append', partition_by=partition_cols
+            # realizar un merge para agregar todos los datos que no coinciden con los datos de destino
+            # tambien se crea updates con todas las columnas a insertar de forma dinamica
+            columnas = [str(col) for col in datos_nuevos2.schema.names]
+            updates = {col: f"source.{col}" for col in columnas}
+            ( 
+            table.merge(
+                source=datos_nuevos2,
+                predicate="target.date = source.date",
+                source_alias="source",
+                target_alias="target"
+                ).when_not_matched_insert(
+                updates=updates
+                ).execute()
             )
+        else:
+            print('No hay datos nuevos para ingresar, la tabla esta actualizada')
 
     except TableNotFoundError:
         # Si no existe la tabla Delta Lake, se guarda como nueva
@@ -99,23 +114,24 @@ def conexion_consultas(config_file, section,driverdb):
             engine = create_engine(
             f"{driverdb}://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}?sslmode=require"
             )
-            #conn = engine.connect()
+            
             # Realizar consultas
-
             Session = sessionmaker(bind=engine)
             session = Session()
 
             # Realizar la consulta para obtener la última fecha de extracción
             result = session.execute(text("SELECT MAX(fecha_extraccion) AS ultima_fecha FROM ultima_extraccion"))
-
+            if result:
             # Obtener el resultado
-            ultima_fecha = result.scalar()  # Utilizamos scalar() para obtener un único valor
+                ultima_fecha = result.scalar()  # Utilizamos scalar() para obtener un único valor
 
-            session.close()  # Cerrar la sesión
+                session.close()  # Cerrar la sesión
 
-            return ultima_fecha
-            #print("Conexión exitosa a la base de datos.")
+                return ultima_fecha
             
+            else:
+                ultimaFecha = datetime.now(timezone.utc)
+                return ultimaFecha
 
         else:
             print(f"Sección {section} no encontrada en el archivo de configuración.")
@@ -253,7 +269,7 @@ def get_data(base_url, endpoint, params=None):
         return None
     
 
-def build_table(data):
+def build_table(data,sort_column=None, ascending=False):
     """
     Construye un DataFrame de pandas a partir de datos en formato JSON.
 
@@ -265,8 +281,22 @@ def build_table(data):
     """
     try:
         df = pd.DataFrame(data)
-        #df_reset = df.reset_index()
-        #df_reset.index.name = 'id'
+        
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+            # Verificar si hubo valores no convertidos
+            if df['date'].isnull().any():
+                print("Advertencia: Algunas fechas no pudieron ser convertidas.")
+
+
+        #df['date'] = df['date'].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT')
+
+        if sort_column and sort_column in df.columns:
+            df = df.sort_values(by=sort_column, ascending=ascending)
+
+        
+
         return df
     except:
         print("Los datos no están en el formato esperado")

@@ -16,3 +16,4 @@ delta-spark==3.2.0   # Para trabajar con Delta Lake en Spark
 pyspark==3.5.0       # Motor de procesamiento distribuido
 pyarrow  
 python-dotenv
+tzdata
