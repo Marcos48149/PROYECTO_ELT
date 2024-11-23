@@ -58,7 +58,7 @@ def guardar_en_tabla_delta(data, path, partition_cols=None):
         # Filtrar los datos nuevos que tienen fecha/hora posterior
         datos_nuevos = data[data['date'] > fechas_max_utc]
         datos_nuevos2 = pa.Table.from_pandas(datos_nuevos)
-        
+
         # aca borro una columna adicinal que me esta creando automaticamente pyarrow 
         datos_nuevos2 = datos_nuevos2.drop(['__index_level_0__'])
 
@@ -103,7 +103,6 @@ def conexion_consultas(config_file, section,driverdb):
         # Lectura del archivo de configuración
         parser = ConfigParser()
         parser.read(config_file)
-        conn= None
         # Creación de un diccionario donde cargamos los parámetros de la base de datos
         db = {}
         if parser.has_section(section):
@@ -112,7 +111,7 @@ def conexion_consultas(config_file, section,driverdb):
 
             # Creación de la conexión a la base de datos con psycopg2
             engine = create_engine(
-            f"{driverdb}://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}?sslmode=require"
+            f"{driverdb}://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}?sslmode=disable"
             )
             
             # Realizar consultas
@@ -121,17 +120,16 @@ def conexion_consultas(config_file, section,driverdb):
 
             # Realizar la consulta para obtener la última fecha de extracción
             result = session.execute(text("SELECT MAX(fecha_extraccion) AS ultima_fecha FROM ultima_extraccion"))
-            if result:
-            # Obtener el resultado
-                ultima_fecha = result.scalar()  # Utilizamos scalar() para obtener un único valor
+            ultima_fecha = result.scalar()  # Utilizamos scalar() para obtener un único valor
+
+            # Verificar si ultima_fecha es None (cuando no hay registros en la tabla)
+            if ultima_fecha is None:
+                ultima_fecha = datetime.now(timezone.utc)
 
                 session.close()  # Cerrar la sesión
-
                 return ultima_fecha
             
-            else:
-                ultimaFecha = datetime.now(timezone.utc)
-                return ultimaFecha
+            return ultima_fecha
 
         else:
             print(f"Sección {section} no encontrada en el archivo de configuración.")
@@ -153,7 +151,7 @@ def devolver_session(config_file, section, driverdb):
             db = {param[0]: param[1] for param in params}
 
             engine = create_engine(
-                f"{driverdb}://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}?sslmode=require"
+                f"{driverdb}://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}?sslmode=disable"
             )
 
             Session = sessionmaker(bind=engine)
@@ -183,8 +181,6 @@ def actualizar_fecha_y_proceso(session, fecha_extraccion, proceso):
         query = """
         INSERT INTO ultima_extraccion (fecha_extraccion, proceso)
         VALUES (:fecha_extraccion, :proceso)
-
-        
         """
         
         # Ejecutar la consulta con los parámetros proporcionados
@@ -197,7 +193,7 @@ def actualizar_fecha_y_proceso(session, fecha_extraccion, proceso):
         print(f"Error al actualizar la base de datos: {e}")
         session.rollback()  # Revertir la transacción si ocurre un error
 
-def connect_to_db(config_file, section, driverdb):
+def conectar_a_db(config_file, section, driverdb):
     """
     Crea una conexión a la base de datos especificada en el archivo de configuración.
 
@@ -236,7 +232,7 @@ def connect_to_db(config_file, section, driverdb):
         print(f"Error al conectarse a la base de datos: {e}")
         return None
 
-def get_data(base_url, endpoint, params=None):
+def obtener_data(base_url, endpoint, params=None):
     """
     Realiza una solicitud GET a una API para obtener datos.
 
@@ -269,7 +265,7 @@ def get_data(base_url, endpoint, params=None):
         return None
     
 
-def build_table(data,sort_column=None, ascending=False):
+def construir_tabla(data,sort_column=None, ascending=False):
     """
     Construye un DataFrame de pandas a partir de datos en formato JSON.
 
