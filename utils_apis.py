@@ -9,6 +9,7 @@ import pyarrow as pa
 from deltalake import write_deltalake, DeltaTable
 from deltalake.exceptions import TableNotFoundError
 from datetime import datetime, timezone,timedelta
+import os
 
 
 
@@ -19,6 +20,28 @@ def guardar_nueva_tabla(df, path, mode="overwrite", partition_cols=None):
         path, df, mode=mode, partition_by=partition_cols
     )
     return 'se creo un delta'
+
+def guardar_Extraccion_full(data, path, partition_cols=None):
+
+    try:
+        
+            table = DeltaTable(path)
+            updates = {col_name:(f"source.{col_name}") for col_name in data.columns}
+            (
+                table.merge(
+                    source=data,
+                    predicate="target.symbol = source.symbol",
+                    source_alias="source",
+                    target_alias="target",
+                ).when_matched_update(
+                    updates=updates
+                ).when_not_matched_insert_all(
+
+                ).execute()
+            )
+    except TableNotFoundError:
+        # Si no existe la tabla Delta Lake, se guarda como nueva
+        guardar_nueva_tabla(data, path, partition_cols=partition_cols)
 
 
 def guardar_en_tabla_delta(data, path, partition_cols=None):
