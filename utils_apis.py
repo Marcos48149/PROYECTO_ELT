@@ -81,9 +81,10 @@ def guardar_en_tabla_delta(data, path, partition_cols=None):
         # Filtrar los datos nuevos que tienen fecha/hora posterior
         datos_nuevos = data[data['date'] > fechas_max_utc]
         datos_nuevos2 = pa.Table.from_pandas(datos_nuevos)
-
+        
         # aca borro una columna adicinal que me esta creando automaticamente pyarrow 
         datos_nuevos2 = datos_nuevos2.drop(['__index_level_0__'])
+
 
         # Verificar si hay datos nuevos para guardar
         if datos_nuevos2.num_rows > 0:
